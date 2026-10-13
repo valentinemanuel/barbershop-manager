@@ -170,6 +170,7 @@ def test_real_cerrada_ajusta_a_abierta_actual(client):
     from datetime import datetime, timedelta
     from decimal import Decimal
     from app.models.servicio import Servicio as ServicioT75b
+    from app.services.jornada_service import fecha_negocio
 
     db = TestingSessionLocal()
     _crear_usuario(db, "admin_j75b", Rol.ADMIN)
@@ -179,7 +180,9 @@ def test_real_cerrada_ajusta_a_abierta_actual(client):
     servicio_id = db.query(ServicioT75b).first().id
     db.close()
     token_admin = _token(client, "admin_j75b")
-    ayer = (datetime.utcnow() - timedelta(days=1)).date().isoformat()
+    # Ayer de negocio, no ayer UTC: entre 00–03 UTC aún es el día
+    # anterior en Buenos Aires y ambos valores colisionaban (409).
+    ayer = (fecha_negocio(datetime.utcnow()) - timedelta(days=1)).isoformat()
     assert client.post("/api/jornadas/abrir", headers=_headers(token_admin), json={"fecha": ayer}).status_code == 201
     assert client.post("/api/jornadas/cerrar", headers=_headers(token_admin), json={"fecha": ayer}).status_code == 200
     hoy = _abrir_hoy(client, token_admin)

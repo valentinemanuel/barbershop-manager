@@ -129,13 +129,12 @@ def _sincronizar_corte_v2(
         from datetime import timezone as timezone_sync
 
         try:
-            # Normalización canónica (T86): `Z`→UTC y microsegundos a cero
-            # para que ISOs equivalentes den el mismo hash idempotente.
+            # Normalización canónica: `Z`→UTC. isoformat ya unifica
+            # las representaciones equivalentes sin perder el instante real.
             texto = str(momento_raw).replace("Z", "+00:00")
             momento = datetime_sync.fromisoformat(texto)
             if momento.tzinfo is not None:
                 momento = momento.astimezone(timezone_sync.utc).replace(tzinfo=None)
-            momento = momento.replace(microsecond=0)
         except ValueError as e:
             return ResultadoOperacion(
                 id=op.id, accion=op.accion, aceptada=False, status_code=400,
