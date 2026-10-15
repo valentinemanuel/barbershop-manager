@@ -170,6 +170,7 @@ def test_real_cerrada_ajusta_a_abierta_actual(client):
     from datetime import datetime, timedelta
     from decimal import Decimal
     from app.models.servicio import Servicio as ServicioT75b
+    from app.services.jornada_service import fecha_negocio
 
     db = TestingSessionLocal()
     _crear_usuario(db, "admin_j75b", Rol.ADMIN)
@@ -179,7 +180,9 @@ def test_real_cerrada_ajusta_a_abierta_actual(client):
     servicio_id = db.query(ServicioT75b).first().id
     db.close()
     token_admin = _token(client, "admin_j75b")
-    ayer = (datetime.utcnow() - timedelta(days=1)).date().isoformat()
+    # Ayer de negocio, no ayer UTC: entre 00–03 UTC aún es el día
+    # anterior en Buenos Aires y ambos valores colisionaban (409).
+    ayer = (fecha_negocio(datetime.utcnow()) - timedelta(days=1)).isoformat()
     assert client.post("/api/jornadas/abrir", headers=_headers(token_admin), json={"fecha": ayer}).status_code == 201
     assert client.post("/api/jornadas/cerrar", headers=_headers(token_admin), json={"fecha": ayer}).status_code == 200
     hoy = _abrir_hoy(client, token_admin)
@@ -463,6 +466,55 @@ def test_acumulados_resumenes_viejos_intactos(client):
     db.close()
     token = _token(client, "barb_j78c")
     assert client.get("/api/cortes/mi/resumen/dia", headers=_headers(token)).status_code == 200
+
+
+def test_imputar_pendientes_al_abrir(client):
+    """T85 (RF-50): pendientes con real en la jornada → imputadas; replay no duplica."""
+    db = TestingSessionLocal()
+    _crear_usuario(db, "admin_j85", Rol.ADMIN)
+    servicio_id = _servicio_y_usuarios(db, "barb_j85")
+    db.close()
+    auth_admin = _headers(_token(client, "admin_j85"))
+    token = _token(client, "barb_j85")
+    corte_id = _corte_simple(client, token, servicio_id)
+    uuid_val = client.post(f"/api/cortes/{corte_id}/movimientos", headers=_headers(token), json={
+        "concepto": "cliente", "importe": "40.00", "metodo_pago": "efectivo",
+    }).json()["uuid"]
+    hoy = _abrir_hoy(client, _token(client, "admin_j85"))
+    r = client.post(f"/api/jornadas/{hoy}/imputaciones", headers=auth_admin)
+    assert r.status_code == 200
+    assert r.json()["imputadas"] == 1
+    db = TestingSessionLocal()
+    fila = _imputacion_de(db, uuid_val)
+    assert fila.estado.value == "imputado"
+    assert fila.jornada_destino_id is not None
+    db.close()
+    r = client.post(f"/api/jornadas/{hoy}/imputaciones", headers=auth_admin)
+    assert r.json()["imputadas"] == 0
+
+
+def test_imputar_solo_su_jornada_y_403(client):
+    """T85: real de otra jornada sigue pendiente; barbero → 403."""
+    from datetime import datetime, timedelta
+
+    db = TestingSessionLocal()
+    _crear_usuario(db, "admin_j85b", Rol.ADMIN)
+    servicio_id = _servicio_y_usuarios(db, "barb_j85b")
+    db.close()
+    auth_admin = _headers(_token(client, "admin_j85b"))
+    token = _token(client, "barb_j85b")
+    corte_id = _corte_simple(client, token, servicio_id)
+    ayer = (datetime.utcnow() - timedelta(days=2)).date().isoformat()
+    momento = f"{ayer}T10:00:00"
+    uuid_val = client.post(f"/api/cortes/{corte_id}/movimientos", headers=auth_admin, json={
+        "concepto": "cliente", "importe": "40.00", "metodo_pago": "efectivo", "momento_real": momento,
+    }).json()["uuid"]
+    hoy = _abrir_hoy(client, _token(client, "admin_j85b"))
+    assert client.post(f"/api/jornadas/{hoy}/imputaciones", headers=auth_admin).json()["imputadas"] == 0
+    db = TestingSessionLocal()
+    assert _imputacion_de(db, uuid_val).estado.value == "pendiente"
+    db.close()
+    assert client.post(f"/api/jornadas/{hoy}/imputaciones", headers=_headers(token)).status_code == 403
 
 
 def test_resumen_cerrada_usa_snapshot_congelado(client):
