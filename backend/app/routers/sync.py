@@ -10,6 +10,7 @@ from app.models.corte import MetodoPago
 from app.models.usuario import Rol, Usuario
 from app.services.corte_service import crear_corte
 from app.services.operacion_corte_service import (
+    ConflictoIdentidad,
     ReintentosAgotados,
     ejecutar_operacion,
 )
@@ -128,7 +129,10 @@ def _sincronizar_corte_v2(
         from datetime import timezone as timezone_sync
 
         try:
-            momento = datetime_sync.fromisoformat(str(momento_raw))
+            # Normalización canónica: `Z`→UTC. isoformat ya unifica
+            # las representaciones equivalentes sin perder el instante real.
+            texto = str(momento_raw).replace("Z", "+00:00")
+            momento = datetime_sync.fromisoformat(texto)
             if momento.tzinfo is not None:
                 momento = momento.astimezone(timezone_sync.utc).replace(tzinfo=None)
         except ValueError as e:
@@ -294,15 +298,24 @@ def _sincronizar_abono_v2(
         )
     try:
         from app.models.corte import MetodoPago as MetodoAbono
+        from app.services.movimiento_corte_service import _candado_abono as _candado_sync
 
         try:
             metodo = MetodoAbono(op.datos.get("metodo_pago") or "efectivo")
         except ValueError:
             metodo = MetodoAbono.EFECTIVO
-        movimiento = registrar_abono(
-            db, autor=usuario, corte=corte, concepto=concepto,
-            importe=importe, metodo=metodo, momento_real=momento,
-            uuid=str(uuid_val), origen="offline",
+        with _candado_sync:
+            movimiento = registrar_abono(
+                db, autor=usuario, corte=corte, concepto=concepto,
+                importe=importe, metodo=metodo, momento_real=momento,
+                uuid=str(uuid_val), origen="offline",
+            )
+            db.commit()
+    except ConflictoIdentidad as e:
+        db.rollback()
+        return ResultadoOperacion(
+            id=op.id, accion=op.accion, aceptada=False, status_code=409,
+            motivo=str(e), notificacion="La operación ya existe con otro contenido.",
         )
     except ValueError as e:
         db.rollback()
@@ -310,7 +323,6 @@ def _sincronizar_abono_v2(
             id=op.id, accion=op.accion, aceptada=False, status_code=400,
             motivo=str(e), notificacion=f"Abono rechazado: {e}",
         )
-    db.commit()
     estado = movimiento.estado.value if movimiento.estado else "aceptado"
     if estado == "revision":
         return ResultadoOperacion(

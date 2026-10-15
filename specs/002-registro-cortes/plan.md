@@ -1,10 +1,29 @@
 # Plan técnico — Spec 002: Registro de cortes del barbero
 
-Estado: **módulo monetario implementado y revisado, aún no conectado a la API; spec completa pendiente**. Continuación retirada por el usuario.
+Estado vigente: **revisión T89 REQUIERE CORRECCIONES; implementación parcial**. Paquetes 1–11 revisados y avances T82–T88 conservados; la revisión integral encontró ocho grupos bloqueantes en `cierre.md`. Pull RF-55, bóveda y protocolo PG completo siguen diferidos, sin absorber otras brechas.
+
+Plan correctivo: [`plan-correcciones.md`](plan-correcciones.md),
+**aprobado por el usuario**, R01 completado y desglose R02 autorizado.
+Propuesta R02a/R02b y T96–T103 redactadas; revisión documental apta para
+aprobación. División/tareas aún pendientes de aprobación, sin implementación R02.
+Auditoría documental APTO PARA APROBACIÓN DEL PLAN. Posteriormente el usuario
+autoriza iniciar con T90 y continuar las restantes con reviewer por tarea:
+T90–T95 ejecutadas; **APROBADO R01 y T95**, 323 tests aislados verdes.
+Estos incrementos no sustituyen el dictamen de cierre.
+Su precedencia técnica sobre propuestas
+históricas incompatibles está aprobada, sin afirmar correcciones ejecutadas.
 Fecha: 2026-10-05. Rama comprobada: `feat/spec-002-registro-cortes`.
 Entrada normativa: `spec.md` aprobada, RF-1–RF-57 y RNF-1–RNF-6, `docs/constitution.md`, `AGENTS.md`, spec 000 y diseño 001. `MEMORY.md` leído como contexto; sus rondas anteriores no sustituyen el estado vigente de la spec.
 
-Este documento es un plan global, **no un tasks.md**. Historial: el dictamen inicial fue REQUIERE CORRECCIONES Y DIVISIÓN; después se aprobaron DA-11, división progresiva y tareas/implementación del paquete monetario (§2). Su cierre fue aprobado por `sdd-reviewer`, con 167 tests aislados verdes según `tasks.md`; las funciones aún no están conectadas a la aplicación. El usuario retiró la continuación posterior: se conservan el plan global y la evidencia monetaria, sin autorización vigente para continuar. No se afirma que una revisión documental equivalga a tests verdes.
+Este documento conserva el plan global histórico, **no sustituye tasks.md**. La continuación inicial fue retirada y posteriormente autorizada en paquetes 2–12 según `tasks.md`/`MEMORY.md`; el reparto monetario sí está conectado al registro. La exploración, inventarios y pseudocódigo de debajo reflejan la propuesta original, no todos los archivos existentes ni capacidades verificadas al cierre.
+
+### Precedencia vigente al cierre T89
+
+- Las decisiones confirmadas en paquetes 2–12 prevalecen sobre propuestas históricas: sin React Query ni bóveda implementada; outbox por cuenta y limpieza simplificada; pull diferido; LWW mediante marcadores. Centavos en tablas nuevas fue una decisión prevista, no una capacidad acreditada: `models/finanzas_corte.py` conserva `Numeric(10,2)` para importe; no afirmar persistencia INTEGER efectiva ni exactitud SQLite integral por esa propuesta.
+- La simplificación de UoW no acredita el protocolo global original: el endurecimiento efectivo T87 usa un candado de abonos en un solo proceso. No afirmar serialización multi-worker/PG, ni protección integral de todos los writers, devoluciones o cierres.
+- T88 verifica dist/SW/API TEMP y conserva milisegundos; no afirma disponibilidad offline de MisSaldos. El bootstrap `create_all` al importar persiste: tests de cierre deben usar cwd y DATABASE_URL TEMP, por archivo/proceso independiente.
+- `specs/003-pull-offline/spec.md` es únicamente el borrador del diferimiento de RF-55 y dependencias; §6.F–§7 conserva referencia histórica, sin aprobar manifests, cifrado ni nuevas interfaces por redactar esa hija.
+- El cierre documental debe distinguir tests verdes de cobertura integral. Dictamen y brechas verificadas se registrarán en `cierre.md`; si existen bloqueantes adicionales, no declarar «completa salvo pull».
 
 **DA-11 resuelta en la spec aprobada:** anulación autorizada terminal prevalece frente a ediciones concurrentes, incluso con timestamp anterior. Entre ediciones todavía permitidas, LWW por método, momento real y grupo financiero íntegro servicio/barbero/precio/porcentaje/reparto. No elude autorización, pagos/cierre, ni reactiva. §6.C refleja esa decisión, no un candidato completo que pise campos independientes. No reabrir DA-11. El gate privacidad/compatibilidad (§4) es una decisión separada, no resuelta por la aprobación anterior.
 

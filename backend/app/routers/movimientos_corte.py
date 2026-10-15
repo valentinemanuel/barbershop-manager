@@ -18,13 +18,16 @@ from app.services.edicion_corte_service import auditar_cambio
 from app.services.movimiento_corte_service import (
     OriginalAusente,
     RevisionResuelta,
+    _candado_abono,
     _candado_devolucion,
     registrar_abono,
     registrar_compensacion,
     registrar_devolucion,
+    resolucion_previa,
     resolver_revision,
     saldos_corte,
 )
+from app.services.operacion_corte_service import ConflictoIdentidad
 
 router = APIRouter(prefix="/api/cortes", tags=["Movimientos"])
 
@@ -117,19 +120,24 @@ def crear_movimiento(
                 status_code=400, detail="El momento real no puede ser futuro"
             )
     try:
-        movimiento = registrar_abono(
-            db,
-            autor=actor,
-            corte=corte,
-            concepto=datos.concepto,
-            importe=datos.importe,
-            metodo=datos.metodo_pago,
-            momento_real=momento,
-            uuid=str(datos.uuid) if datos.uuid is not None else None,
-        )
+        with _candado_abono:
+            movimiento = registrar_abono(
+                db,
+                autor=actor,
+                corte=corte,
+                concepto=datos.concepto,
+                importe=datos.importe,
+                metodo=datos.metodo_pago,
+                momento_real=momento,
+                uuid=str(datos.uuid) if datos.uuid is not None else None,
+            )
+            db.commit()
+    except ConflictoIdentidad as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    db.commit()
     db.refresh(movimiento)
     return _respuesta_movimiento(db, movimiento)
 
@@ -196,6 +204,8 @@ class ResolucionCrear(BaseModel):
     motivo: str
     importe_real: Optional[Decimal] = None
     operacion_uuid: Optional[UUID] = None
+    # Evidencia obligatoria si lo erróneo reconoce dinero (T86, RF-41).
+    evidencia: Optional[str] = None
 
 
 @router.post(
@@ -230,6 +240,7 @@ def resolver_revision_endpoint(
     if not movimiento:
         raise HTTPException(status_code=404, detail="Movimiento no encontrado")
     estado_antes = movimiento.estado.value if movimiento.estado else "aceptado"
+    es_replay = resolucion_previa(db, movimiento)
     try:
         resultado = resolver_revision(
             db,
@@ -239,24 +250,26 @@ def resolver_revision_endpoint(
             motivo=datos.motivo,
             importe_real=datos.importe_real,
             operacion_uuid=str(datos.operacion_uuid) if datos.operacion_uuid else None,
+            evidencia=datos.evidencia,
         )
     except RevisionResuelta as e:
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    auditar_cambio(
-        db,
-        corte_id=corte.id,
-        actor_id=actor.id,
-        accion=AccionAuditoriaCorte.RESOLUCION,
-        antes={"movimiento_uuid": movimiento.uuid, "estado": estado_antes},
-        despues={
-            "movimiento_uuid": movimiento.uuid,
-            "estado": movimiento.estado.value if movimiento.estado else None,
-            "resuelto_uuid": resultado.uuid,
-        },
-        motivo=datos.motivo,
-    )
+    if not es_replay:
+        auditar_cambio(
+            db,
+            corte_id=corte.id,
+            actor_id=actor.id,
+            accion=AccionAuditoriaCorte.RESOLUCION,
+            antes={"movimiento_uuid": movimiento.uuid, "estado": estado_antes},
+            despues={
+                "movimiento_uuid": movimiento.uuid,
+                "estado": movimiento.estado.value if movimiento.estado else None,
+                "resuelto_uuid": resultado.uuid,
+            },
+            motivo=datos.motivo,
+        )
     db.commit()
     db.refresh(resultado)
     return _respuesta_movimiento(db, resultado)
@@ -308,6 +321,8 @@ def crear_compensacion(
         )
     except OriginalAusente as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ConflictoIdentidad as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     auditar_cambio(
@@ -378,6 +393,9 @@ def crear_devolucion(
                 motivo=datos.motivo,
             )
             db.commit()
+    except ConflictoIdentidad as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

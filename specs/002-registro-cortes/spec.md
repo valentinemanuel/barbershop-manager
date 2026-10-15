@@ -2,13 +2,30 @@
 
 Estado: aprobada
 
+## Estado vigente de ejecución y alcance diferido
+
+Paquetes 1–11 revisados y paquete 12 T82–T88 implementadas. El usuario
+autoriza terminar T89 (regresión, documentación y revisión de cierre).
+Resultado de la revisión independiente T89: **REQUIERE CORRECCIONES**.
+Hay brechas de idempotencia, recuperación de envío, contratos monetarios,
+privacidad/cambio de cuenta, concurrencia, interfaz PWA y jornadas adicionales
+al pull. La implementación es parcial; no se declara «completa salvo pull».
+Evidencia, referencias y dictamen en `cierre.md`.
+
+El diferimiento confirmado del paquete 12 traslada RF-55 y las partes
+dependientes de lectura offline, cobertura y revocaciones a la spec 003, aún
+en borrador. Bóveda cifrada, protocolo PostgreSQL completo y locale siguen
+pendientes según las decisiones documentadas. Los RF originales se conservan
+como contrato y trazabilidad; diferidos no significa satisfechos, ni autoriza
+retirar otros requisitos por cuenta propia.
+
 ## Contexto y objetivo
 
 El registro de cortes es el flujo central del negocio: registrar el servicio realizado, calcular la parte del profesional, consultar su historial y seguir el dinero que falta cobrar o pagar. Existe un flujo básico, pero no basta con registrar online y enviar pendientes: deben mantenerse la fecha real, la identidad del barbero y la coherencia de las operaciones cuando se trabaja sin conexión.
 
 Esta spec formaliza y amplía ese flujo con edición, anulación, cobros del cliente y pagos de comisión, incluidos pagos parciales. Evita que los reintentos dupliquen cortes o movimientos y que las correcciones del barbero alteren operaciones que ya tienen dinero registrado o pertenecen a un cierre de caja.
 
-La autorización y privacidad de la spec 000 y la experiencia visual de la spec 001 siguen vigentes. Las decisiones de clarificación confirmadas están incorporadas y el usuario aprobó la spec completa y autorizó generar el plan. Las tareas y la implementación requieren aprobación posterior independiente.
+La autorización y privacidad de la spec 000 y la experiencia visual de la spec 001 siguen vigentes. Las decisiones de clarificación confirmadas están incorporadas; las autorizaciones posteriores de paquetes y ejecución se registran en tasks.md y MEMORY.md. El registro de clarificación final conserva el historial inicial, no el estado de autorización actual.
 
 ## Usuarios
 

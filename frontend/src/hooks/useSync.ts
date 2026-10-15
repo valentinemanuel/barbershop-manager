@@ -31,7 +31,9 @@ export function useSync() {
         const pendientesV2 = await db.outboxOperaciones
           .where('actorId')
           .equals(actorId)
-          .filter((o) => o.estado === 'pendiente' && o.tipo !== 'abono')
+          // Las correcciones tienen su sender propio: nunca crear un corte
+          // con servicioId=0 a partir de una edición/anulación (E2E T88).
+          .filter((o) => o.estado === 'pendiente' && (o.tipo === 'corte' || o.tipo === undefined))
           .toArray()
         if (pendientesV2.length > 0) {
           try {
